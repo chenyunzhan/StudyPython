@@ -4,34 +4,56 @@ from random import randint,sample
 
 class TankGame():
 
-    gameWidth=600
-    gameHeight=500
-    myTankMissile=[]
+    gameWidth=1024
+    gameHeight=768
+    myTankMissile=pygame.sprite.Group()
+    enemyTankMissle=pygame.sprite.Group()
     booms=[]
     enemyTanks = pygame.sprite.Group()
+    waitEnemyTanks = pygame.sprite.Group()
+    myTank = None
+    walls=pygame.sprite.Group()
 
     def startGame(self):
         pygame.init()
         screen = pygame.display.set_mode((TankGame.gameWidth,TankGame.gameHeight),0,32)
-        tank = MyTank(screen)
-        for i in range(0,500):
+        TankGame.myTank = MyTank(screen)
+        for i in range(0,20):
             enemyTank = EnemyTank(screen)
             TankGame.enemyTanks.add(enemyTank)
+
+        for i in range(0,8):
+            wall = Wall(screen,(300,i*60))
+            TankGame.walls.add(wall)
         while True:
             screen.fill((0,0,0))
-            tank.show()
-            tank.move()
+
+            TankGame.waitEnemyTanks = TankGame.enemyTanks.copy()
+
+            for wall in TankGame.walls:
+                wall.show()
+                wall.hit()
+
+            if TankGame.myTank.alive:
+                TankGame.myTank.show()
+                TankGame.myTank.move()
             for enemyTank in TankGame.enemyTanks:
                 enemyTank.show()
                 enemyTank.move()
+                enemyTank.fire()
             for missile in TankGame.myTankMissile:
                 if not missile.alive:
                     TankGame.myTankMissile.remove(missile)
                 missile.show()
                 missile.move()
+            for missile in TankGame.enemyTankMissle:
+                if not missile.alive:
+                    TankGame.enemyTankMissle.remove(missile)
+                missile.show()
+                missile.move()
             for boom in TankGame.booms:
                 boom.show()
-            self.getEvent(tank,screen)
+            self.getEvent(TankGame.myTank,screen)
             self.showText(screen)
             pygame.display.set_caption('坦克大战')
             time.sleep(0.05)
@@ -65,8 +87,13 @@ class TankGame():
                     tank.direction = "D"
                     tank.stop=False
                 elif event.key==K_j:
-                    misslie=Missile(screen,tank)
-                    TankGame.myTankMissile.append(misslie)
+                    if tank.alive:
+                        tank.fire()
+                elif event.key==K_n:
+                    tank.alive=True
+                    position=(400,270)
+                    tank.rect.top = position[0]
+                    tank.rect.left = position[1]
             elif event.type==KEYUP:
                 if event.key==K_a:
                     tank.stop=True
@@ -82,6 +109,8 @@ class MySprite(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.screen = screen
 
+    def show(self):
+        pass
 
 class Tank(MySprite):
     def __init__(self,screen,position):
@@ -100,15 +129,22 @@ class Tank(MySprite):
         self.rect = self.image.get_rect()
         self.rect.top=position[0]
         self.rect.left=position[1]
+        self.lastPosition=(0,0)
 
 
     def show(self):
         self.image = self.images[self.direction]
         self.screen.blit(self.image,self.rect)
 
+    def stay(self):
+        self.rect.top=self.lastPosition[0]
+        self.rect.left=self.lastPosition[1]
+
     def move(self):
 
         if not self.stop:
+
+            self.lastPosition=(self.rect.top,self.rect.left)
             if self.direction=="L":
                 if self.rect.left>0:
                     self.rect.left -= self.speed
@@ -131,11 +167,26 @@ class Tank(MySprite):
                     self.rect.bottom=TankGame.gameHeight
 
     def fire(self):
-        pass
+        temp = self.direction
+        self.direction="U"
+        misslie = Missile(self.screen, self)
+        TankGame.myTankMissile.add(misslie)
+        self.direction="L"
+        misslie = Missile(self.screen, self)
+        TankGame.myTankMissile.add(misslie)
+        self.direction="R"
+        misslie = Missile(self.screen, self)
+        TankGame.myTankMissile.add(misslie)
+        self.direction="D"
+        misslie = Missile(self.screen, self)
+        TankGame.myTankMissile.add(misslie)
+
+        self.direction=temp
 
 class MyTank(Tank):
     def __init__(self,screen):
         super().__init__(screen,(400,270))
+        self.type="my"
 
 
 
@@ -151,7 +202,7 @@ class EnemyTank(Tank):
         self.step=0
         self.speed=10
         self.direction = sample(["U","D","L","R"],1)[0]
-
+        self.type="enemy"
 
     def move(self):
         self.step+=1
@@ -160,6 +211,11 @@ class EnemyTank(Tank):
             self.direction = sample(["U","D","L","R"],1)[0]
         super().move()
 
+    def fire(self):
+        if randint(0,100) > 95:
+            misslie = Missile(self.screen, self)
+            TankGame.enemyTankMissle.add(misslie)
+
 class Missile(MySprite):
     def __init__(self,screen,tank):
         super().__init__(screen)
@@ -167,6 +223,7 @@ class Missile(MySprite):
         self.alive=True
         self.rect = self.image.get_rect()
         self.direction = tank.direction
+        self.tank = tank
 
         position=(0,0)
         if self.direction=="U":
@@ -182,6 +239,7 @@ class Missile(MySprite):
         self.speed=30
 
     def show(self):
+
         self.screen.blit(self.image,self.rect)
 
     def move(self):
@@ -189,35 +247,43 @@ class Missile(MySprite):
         self.hit()
         if self.alive:
             if self.direction=="L":
-                print(self.rect.left)
-                if self.rect.left>-self.rect.width:
+                if self.rect.left>0:
                     self.rect.left -= self.speed
                 else:
                     self.alive = False
             elif self.direction=="R":
-                if self.rect.right<TankGame.gameWidth+self.rect.width:
+                if self.rect.right<TankGame.gameWidth:
                     self.rect.right += self.speed
                 else:
                     self.alive = False
             elif self.direction=="U":
-                if self.rect.top>-self.rect.height:
+                if self.rect.top>0:
                     self.rect.top -= self.speed
                 else:
                     self.alive = False
             elif self.direction=="D":
-                if self.rect.bottom<TankGame.gameHeight+self.rect.height:
+                if self.rect.bottom<TankGame.gameHeight:
                     self.rect.bottom += self.speed
                 else:
                     self.alive = False
 
     def hit(self):
-        blocks_hit_list = pygame.sprite.spritecollide(self, TankGame.enemyTanks, True)
 
-        for hitTank in blocks_hit_list:
-            hitTank.alive=False
-            self.alive=False
-            boom = Boom(self.screen,hitTank)
-            TankGame.booms.append(boom)
+        if self.tank.type == "my":
+            blocks_hit_list = pygame.sprite.spritecollide(self, TankGame.enemyTanks, True)
+            for hitTank in blocks_hit_list:
+                hitTank.alive = False
+                self.alive = False
+                boom = Boom(self.screen, hitTank)
+                TankGame.booms.append(boom)
+        elif self.tank.type == "enemy" and TankGame.myTank.alive:
+            result = pygame.sprite.collide_rect(self, TankGame.myTank)
+            if result:
+                self.alive = False
+                TankGame.myTank.alive = False
+                boom = Boom(self.screen, TankGame.myTank)
+                TankGame.booms.append(boom)
+
 
 class Boom(MySprite):
     def __init__(self,screen,tank):
@@ -235,7 +301,6 @@ class Boom(MySprite):
                      pygame.image.load("images/blast8.gif")]
     def show(self):
         if self.alive:
-            print(self.imageIndex)
             if self.imageIndex==len(self.images):
                 self.alive=False
             else:
@@ -244,6 +309,37 @@ class Boom(MySprite):
 
         else:
             pass
+
+class Wall(MySprite):
+    def __init__(self,screen,position):
+        super().__init__(screen)
+        self.image=pygame.image.load("images/steels.gif")
+        self.rect = self.image.get_rect()
+        self.rect.top=position[0]
+        self.rect.left=position[1]
+        self.tankLastDirection = "U"
+
+    def show(self):
+        self.screen.blit(self.image,self.rect)
+
+
+    def hit(self):
+        result = pygame.sprite.collide_rect(self, TankGame.myTank)
+        if result:
+            TankGame.myTank.stop=True
+            TankGame.myTank.stay()
+
+        blocks_hit_list = pygame.sprite.spritecollide(self, TankGame.waitEnemyTanks, False)
+        for hitTank in blocks_hit_list:
+            hitTank.stay()
+            TankGame.waitEnemyTanks.remove(hitTank)
+
+
+        blocks_hit_list = pygame.sprite.spritecollide(self, TankGame.myTankMissile, True)
+
+        blocks_hit_list = pygame.sprite.spritecollide(self, TankGame.enemyTankMissle, True)
+
+
 
 tankGame=TankGame()
 tankGame.startGame()

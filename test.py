@@ -1,23 +1,52 @@
-import pygame
-from pygame.locals import *
+import types
+import sys
+import functools
+
+def fib(times):
+    index=0
+    a,b=0,1
+
+    while(index<times):
+        yield b
+        a,b=b,a+b
+        index+=1
+    return "done"
+
+def outer():
+    def inner():
+        print("inner")
+    return inner
 
 
-class AAA():
-
-    def startGame(self):
-        screen = pygame.display.set_mode((600,500),0,32)
-        pygame.display.set_caption('坦克大战')
-
-        while True:
-            screen.fill((255,255,255))
-            pygame.display.update()
-            self.getEvent()
+def ref_count():
+    x = 10000
+    y = sys.getrefcount(x)
+    print(y)
+    b = x
+    print(sys.getrefcount(b))
 
 
-    def getEvent(self):
-        for event in pygame.event.get():
-            if event.type==QUIT:
-                self.stopGame()
 
-tankGame=AAA()
-tankGame.startGame()
+class Person(object):
+    def __init__(self):
+        print("init")
+
+    def __getattribute__(self, item):
+        if (item=="a"):
+            return "redirect a"
+        else:
+            return self.b
+
+def aaa(self):
+    print("+"*30)
+
+
+def show_args(*args, **kwargs):
+    print(args)
+    print(kwargs)
+
+
+p1 = functools.partial(show_args,a="1")
+
+p1(a="2")
+
